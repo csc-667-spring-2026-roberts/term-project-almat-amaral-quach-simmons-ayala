@@ -1,6 +1,8 @@
 import express from "express";
 import path from "path";
 
+import homeRoutes from "./routes/home.js";
+
 const app = express();
 const PORT: number = process.env.PORT ? Number(process.env.PORT) : 3000;
 
@@ -10,10 +12,12 @@ app.use(express.urlencoded({ extended: true }));
 console.log(path.join(path.resolve(), "../public"));
 app.use(express.static(path.join(path.resolve(), "../public")));
 
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+app.use((request, _response, next) => {
+  console.log(`${new Date().toISOString()} ${request.method} ${request.path}`);
   next();
 });
+
+app.use("/", homeRoutes);
 
 app.get("/", (req, res) => {
   res.send(`<h1>Express is listening on port ${String(PORT)}</h1> <p>${typeof req.body}</p>`);
