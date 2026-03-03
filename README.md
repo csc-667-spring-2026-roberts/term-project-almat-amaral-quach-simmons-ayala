@@ -6,7 +6,7 @@ CSC 667 Term Project — Spring 2026
 
 | Name | GitHub | Email |
 |------|--------|-------|
-| Member 1 | @username | email@sfsu.edu |
+| Kelvin Quach | @kquach31 | kquach@sfsu.edu |
 | Kyler Simmons Ayala | @Kyler2424 | ksimmonsayala@sfsu.edu |
 | Dias Almat | @vincivv | dalmat@sfsu.edu |
 | Ruben Amaral Almaraz | @rubenAmaral | ramaral@sfsu.edu |
