@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 
 import homeRoutes from "./routes/home.js";
+import testRoutes from "./routes/test.js";
 
 const app = express();
 const PORT: number = process.env.PORT ? Number(process.env.PORT) : 3000;
@@ -18,6 +19,7 @@ app.use((request, _response, next) => {
 });
 
 app.use("/", homeRoutes);
+app.use("/test", testRoutes);
 
 app.get("/", (req, res) => {
   res.send(`<h1>Express is listening on port ${String(PORT)}</h1> <p>${typeof req.body}</p>`);
