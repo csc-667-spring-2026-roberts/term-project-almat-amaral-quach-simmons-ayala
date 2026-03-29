@@ -17,7 +17,6 @@
     "migrate": "node-pg-migrate -j ts create -- ",
     "migrate:up": "node-pg-migrate up -j ts",
     "migrate:down": "node-pg-migrate down -j ts"
-
   },
   "lint-staged": {
     "src/**/*.ts": [
