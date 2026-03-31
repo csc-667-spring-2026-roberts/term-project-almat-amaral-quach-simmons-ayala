@@ -1,6 +1,10 @@
 <div class="auth-wrapper">
   <h2 class="game-title">LOGIN</h2>
   <div class="uno-card blue-card">
+      <% if (error) { %>
+          <div class="error-banner"><%= error %></div>
+      <% } %>
+
       <form action="/auth/login" method="POST">
           <div class="form-group">
               <label for="email">Email:</label>
