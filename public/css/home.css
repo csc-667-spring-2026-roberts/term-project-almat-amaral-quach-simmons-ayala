@@ -13,7 +13,7 @@
     margin: 0; display: flex; flex-direction: column; min-height: 100vh;
   }
   
-  /* Nav Bar Fix (Keeping your UNO black style) */
+  /* Nav Bar */
   .uno-nav {
     background: #000; padding: 10px 5%;
     display: flex; justify-content: space-between; align-items: center;
@@ -25,7 +25,7 @@
     border-radius: 5px; font-weight: bold; cursor: pointer;
   }
   
-  /* The Main Container (Centered like the ref) */
+  /* The Main Container */
   main { 
     flex: 1; display: flex; justify-content: center; align-items: flex-start; 
     padding-top: 50px; 
