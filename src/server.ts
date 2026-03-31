@@ -6,6 +6,7 @@ import homeRoutes from "./routes/home.js";
 import testRoutes from "./routes/test.js";
 import authRoutes from "./routes/auth.js";
 import lobbyRoutes from "./routes/lobby.js";
+import expressLayouts from "express-ejs-layouts";
 import connectPgSimple from "connect-pg-simple";
 import db from "./db/connections.js";
 import { configDotenv } from "dotenv";
@@ -22,6 +23,9 @@ app.use(express.urlencoded({ extended: true }));
 // FIX: Point to root views folder
 app.set("view engine", "ejs");
 app.set("views", path.join(path.resolve(), "views"));
+
+app.use(expressLayouts);
+app.set("layout", "layout");
 
 const PgSession = connectPgSimple(session);
 app.use(

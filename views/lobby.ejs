@@ -1,6 +1,18 @@
-<h2>Lobby</h2>
-<div class="user-info">
-    <p>Logged in as: <strong><%= user.email %></strong></p>
-    <img src="<%= user.gravatar_url %>" alt="User Avatar" style="border-radius: 50%; width: 100px;">
+<div class="lobby-container">
+    <div class="lobby-header">
+        <h2 class="lobby-title">Lobby</h2>
+    </div>
+    
+    <hr class="lobby-divider">
+
+    <div class="lobby-body">
+        <p class="lobby-text">Logged in as: <strong><%= user.email %></strong></p>
+        
+        <div class="avatar-section">
+            <img src="<%= user.avatarUrl %>" alt="User Avatar" class="user-avatar" 
+                 onerror="this.src='https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y'">
+        </div>
+        
+        <p class="lobby-welcome">Welcome to the protected area!</p>
+    </div>
 </div>
-<p>Welcome to the protected area!</p>
