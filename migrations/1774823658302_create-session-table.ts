@@ -2,7 +2,7 @@ import { MigrationBuilder, PgType } from 'node-pg-migrate';
 
 export async function up(pgm: MigrationBuilder): Promise<void> {
     pgm.createTable("session", {
-        sid: { type: PgType.VARCHAR, notNull: true, primaryKey: true },
+        id: { type: PgType.VARCHAR, notNull: true, primaryKey: true },
         sess: { type: PgType.JSON, notNull: true},
         expire: { type: PgType.TIMESTAMP, notNull: true}
     });

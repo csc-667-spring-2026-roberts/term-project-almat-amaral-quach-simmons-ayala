@@ -4,10 +4,12 @@ import path from "path";
 
 import homeRoutes from "./routes/home.js";
 import testRoutes from "./routes/test.js";
-
+import authRoutes from "./routes/auth.js";
+import lobbyRoutes from "./routes/lobby.js";
 import connectPgSimple from "connect-pg-simple";
 import db from "./db/connections.js";
 import { configDotenv } from "dotenv";
+import { User } from "./types/types.js";
 
 configDotenv();
 
@@ -16,6 +18,10 @@ const PORT: number = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// FIX: Point to root views folder
+app.set("view engine", "ejs");
+app.set("views", path.join(path.resolve(), "views"));
 
 const PgSession = connectPgSimple(session);
 app.use(
@@ -33,8 +39,8 @@ app.use(
   }),
 );
 
-console.log(path.join(path.resolve(), "../public"));
-app.use(express.static(path.join(path.resolve(), "../public")));
+// FIX: Point to root public folder
+app.use(express.static(path.join(path.resolve(), "public")));
 
 app.use((request, _response, next) => {
   console.log(`${new Date().toISOString()} ${request.method} ${request.path}`);
@@ -43,6 +49,8 @@ app.use((request, _response, next) => {
 
 app.use("/", homeRoutes);
 app.use("/test", testRoutes);
+app.use("/auth", authRoutes);
+app.use("/lobby", lobbyRoutes);
 
 app.get("/", (req, res) => {
   res.send(`<h1>Express is listening on port ${String(PORT)}</h1> <p>${typeof req.body}</p>`);
@@ -51,3 +59,9 @@ app.get("/", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${String(PORT)}`);
 });
+
+declare module "express-session" {
+  interface SessionData {
+    user: User;
+  }
+}

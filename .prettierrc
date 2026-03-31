@@ -4,5 +4,7 @@
   "tabWidth": 2,
   "useTabs": false,
   "trailingComma": "all",
-  "printWidth": 100
+  "printWidth": 100, 
+  "plugins":
+    "prettier-plugin-ejs"
 }

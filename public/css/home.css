@@ -1,0 +1,39 @@
+body{
+    font-family: sans-serif;
+    max-width: 900px;
+    margin:2rem auto;
+    padding: 0 1rem;
+}
+
+form div{
+    margin-bottom: 1rem;
+}
+
+lable{
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+input{
+    width: 100%;
+    padding: 0.25rem;
+    box-sizing: border-box;
+}
+
+button{
+    padding: 0.25rem 1rem;
+    cursor: pointer;
+}
+
+.error{
+    color: red;
+    margin-top: 1rem;
+    margin-bottom: 1rem; 
+    padding: 0.5rem;
+    border: 1px solid red; 
+    border-radius: 4px;
+}
+
+nav from{
+    display: inline;
+}

@@ -31,20 +31,28 @@ const unoStyles = `
 </style>
 `;
 
-router.get("/", (_request, response) => {
-  response.send(`
-    ${unoStyles}
-    <img src="https://upload.wikimedia.org/wikipedia/commons/f/f9/UNO_Logo.svg" width="200" alt="Uno Logo">
-    <h1>Welcome to UNO Online</h1>
-    <p>Current Server Time: ${new Date().toLocaleTimeString()}</p>
-    <div class="card-container">
-      <div class="card red">7</div>
-      <div class="card blue">2</div>
-      <div class="card yellow">9</div>
-    </div>
-    <br><br>
-    <a href="/lobby" class="btn">Join Game Lobby</a>
-  `);
+router.get("/", (request, response) => {
+  if (request.session.user?.id) {
+  response.redirect("/lobby")
+  }else{
+    response.redirect("/auth/login")
+  }
+
+
+
+  //response.send(`
+   //  ${unoStyles}
+   //  <img src="https://upload.wikimedia.org/wikipedia/commons/f/f9/UNO_Logo.svg" width="200" alt="Uno Logo">
+  //   <h1>Welcome to UNO Online</h1>
+  //   <p>Current Server Time: ${new Date().toLocaleTimeString()}</p>
+  //   <div class="card-container">
+  //     <div class="card red">7</div>
+   //    <div class="card blue">2</div>
+  //     <div class="card yellow">9</div>
+  //   </div>
+  //   <br><br>
+  //   <a href="/lobby" class="btn">Join Game Lobby</a>
+  // `);
 });
 
 export default router;
