@@ -31,14 +31,18 @@
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@types/bcrypt": "^6.0.0",
+    "@types/connect-livereload": "^0.6.3",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/dotenv": "^6.1.1",
     "@types/ejs": "^3.1.5",
     "@types/express": "^5.0.6",
     "@types/express-ejs-layouts": "^2.5.4",
     "@types/express-session": "^1.18.2",
+    "@types/livereload": "^0.9.5",
     "@types/node": "^20.19.35",
     "@types/pg-promise": "^0.0.28",
+    "concurrently": "^9.2.1",
+    "esbuild": "^0.28.0",
     "eslint": "^10.0.2",
     "husky": "^9.0.0",
     "lint-staged": "^15.2.0",
@@ -52,12 +56,14 @@
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "connect-livereload": "^0.6.1",
     "connect-pg-simple": "^10.0.0",
     "dotenv": "^17.3.1",
     "ejs": "^5.0.1",
     "express": "^5.2.1",
     "express-ejs-layouts": "^2.5.1",
     "express-session": "^1.19.0",
+    "livereload": "^0.10.3",
     "node-pg-migrate": "^8.0.4",
     "pg-promise": "^12.6.2"
   }

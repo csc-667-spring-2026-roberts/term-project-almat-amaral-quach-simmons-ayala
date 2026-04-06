@@ -11,11 +11,20 @@ import connectPgSimple from "connect-pg-simple";
 import db from "./db/connections.js";
 import { configDotenv } from "dotenv";
 import { User } from "./types/types.js";
+import livereload from "livereload";
+import connectLiveReload from "connect-livereload";
 
 configDotenv();
 
 const app = express();
 const PORT: number = process.env.PORT ? Number(process.env.PORT) : 3000;
+
+if (process.env.NODE_ENV !== "production") {
+  const liveReloadServer = livereload.createServer({ exts: ["ejs", "css", "js"] });
+  liveReloadServer.watch([path.join(path.resolve(), "views"), path.join(path.resolve(), "public")]);
+
+  app.use(connectLiveReload());
+}
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
