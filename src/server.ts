@@ -6,6 +6,7 @@ import homeRoutes from "./routes/home.js";
 import testRoutes from "./routes/test.js";
 import authRoutes from "./routes/auth.js";
 import lobbyRoutes from "./routes/lobby.js";
+import gameRoutes from "./routes/games.js";
 import expressLayouts from "express-ejs-layouts";
 import connectPgSimple from "connect-pg-simple";
 import db from "./db/connections.js";
@@ -13,6 +14,7 @@ import { configDotenv } from "dotenv";
 import { User } from "./types/types.js";
 import livereload from "livereload";
 import connectLiveReload from "connect-livereload";
+import { requireAuth } from "./middleware/auth.js";
 
 configDotenv();
 
@@ -39,7 +41,7 @@ app.set("layout", "layout");
 const PgSession = connectPgSimple(session);
 app.use(
   session({
-    store: new PgSession({ pgPromise: db }),
+    store: new PgSession({ pgPromise: db, createTableIfMissing: true }),
     secret: process.env.SESSION_SECRET || "dev-secret",
     resave: false,
     saveUninitialized: false,
@@ -64,6 +66,7 @@ app.use("/", homeRoutes);
 app.use("/test", testRoutes);
 app.use("/auth", authRoutes);
 app.use("/lobby", lobbyRoutes);
+app.use("/api/games", requireAuth, gameRoutes);
 
 app.get("/", (req, res) => {
   res.send(`<h1>Express is listening on port ${String(PORT)}</h1> <p>${typeof req.body}</p>`);
