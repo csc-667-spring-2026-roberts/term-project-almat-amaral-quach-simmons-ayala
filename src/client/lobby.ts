@@ -5,7 +5,7 @@ const gamesList = document.querySelector<HTMLDivElement>("#games-list");
 
 async function loadGames(): Promise<void> {
   const response = await fetch("/api/games");
-  const games: GameListItem[] = await response.json();
+  const { games } = (await response.json()) as { games: GameListItem[] };
 
   if (!gamesList) {
     return;
