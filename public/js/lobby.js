@@ -3,26 +3,30 @@
   // src/client/lobby.ts
   var createGameButton = document.querySelector("#create-game");
   var gamesList = document.querySelector("#games-list");
+  var gameTemplate = document.querySelector("#game-template");
   async function loadGames() {
     const response = await fetch("/api/games");
     const { games } = await response.json();
-    if (!gamesList) {
+    if (!gamesList || !gameTemplate) {
       return;
     }
+    gamesList.innerHTML = "";
     if (games.length === 0) {
-      gamesList.innerHTML = "<p>No games created yet. Create one!</p>";
+      gamesList.textContent = "No games created yet. Create one!";
       return;
     }
-    gamesList.innerHTML = games.map(
-      (game) => `
-        <div class="game-card">
-            <span>Game #${String(game.id)}</span>
-            <span>${game.creator_email}</span>
-            <span>${String(game.player_count)} player(s)</span>
-            <span>${String(game.status)}</span>
-        </div>
-        `
-    ).join("");
+    games.forEach((game) => {
+      const clone = gameTemplate.content.cloneNode(true);
+      const gameId = clone.querySelector(".game-id");
+      const creator = clone.querySelector(".creator");
+      const players = clone.querySelector(".players");
+      const status = clone.querySelector(".status");
+      if (gameId) gameId.textContent = `Game #${String(game.id)}`;
+      if (creator) creator.textContent = game.creator_email;
+      if (players) players.textContent = `${String(game.player_count)} player(s)`;
+      if (status) status.textContent = String(game.status);
+      gamesList.appendChild(clone);
+    });
   }
   async function createGame() {
     const response = await fetch("/api/games", {
