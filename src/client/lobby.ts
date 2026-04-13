@@ -1,11 +1,11 @@
 import type { GameListItem } from "../types/types.js";
 
 const createGameButton = document.querySelector<HTMLButtonElement>("#create-game");
-const gamesList = document.querySelector<HTMLUListElement>("#games-list");
+const gamesList = document.querySelector<HTMLDivElement>("#games-list");
 
 async function loadGames(): Promise<void> {
   const response = await fetch("/api/games");
-  const { games } = (await response.json()) as { games: GameListItem[] };
+  const games: GameListItem[] = await response.json();
 
   if (!gamesList) {
     return;
@@ -50,4 +50,5 @@ async function createGame(): Promise<void> {
 createGameButton?.addEventListener("click", () => {
   void createGame();
 });
+
 void loadGames();

@@ -5,7 +5,7 @@
   var gamesList = document.querySelector("#games-list");
   async function loadGames() {
     const response = await fetch("/api/games");
-    const { games } = await response.json();
+    const games = await response.json();
     if (!gamesList) {
       return;
     }
