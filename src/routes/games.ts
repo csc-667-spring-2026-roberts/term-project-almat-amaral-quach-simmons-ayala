@@ -1,5 +1,6 @@
 import { Router } from "express";
 import Games from "../db/games.js";
+import SSE from "../sse.js";
 
 const router = Router();
 
@@ -21,7 +22,14 @@ router.post("/", async (request, response) => {
   const userId = user.id;
   const game = await Games.create(userId);
 
-  response.json({ game });
+  const games = await Games.list();
+
+  SSE.broadcast({
+    type: "games_updated",
+    games,
+  });
+
+  response.status(201).json({ game });
 });
 
 export default router;

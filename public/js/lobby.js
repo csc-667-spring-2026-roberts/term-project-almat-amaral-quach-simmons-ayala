@@ -4,9 +4,7 @@
   var createGameButton = document.querySelector("#create-game");
   var gamesList = document.querySelector("#games-list");
   var gameTemplate = document.querySelector("#game-template");
-  async function loadGames() {
-    const response = await fetch("/api/games");
-    const { games } = await response.json();
+  function renderGames(games) {
     if (!gamesList || !gameTemplate) {
       return;
     }
@@ -28,6 +26,11 @@
       gamesList.appendChild(clone);
     });
   }
+  async function loadGames() {
+    const response = await fetch("/api/games");
+    const { games } = await response.json();
+    renderGames(games);
+  }
   async function createGame() {
     const response = await fetch("/api/games", {
       method: "POST",
@@ -37,10 +40,15 @@
     });
     if (!response.ok) {
       console.error("Failed to create game");
-      return;
     }
-    await loadGames();
   }
+  var source = new EventSource("/api/sse");
+  source.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "games_updated" && data.games) {
+      renderGames(data.games);
+    }
+  };
   createGameButton?.addEventListener("click", () => {
     void createGame();
   });

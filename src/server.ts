@@ -15,6 +15,7 @@ import { User } from "./types/types.js";
 import livereload from "livereload";
 import connectLiveReload from "connect-livereload";
 import { requireAuth } from "./middleware/auth.js";
+import sseRoutes from "./routes/sse.js";
 
 configDotenv();
 
@@ -66,6 +67,7 @@ app.use("/", homeRoutes);
 app.use("/test", testRoutes);
 app.use("/auth", authRoutes);
 app.use("/lobby", lobbyRoutes);
+app.use("/api/sse", requireAuth, sseRoutes);
 app.use("/api/games", requireAuth, gameRoutes);
 
 app.get("/", (req, res) => {
