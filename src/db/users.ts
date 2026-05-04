@@ -2,12 +2,8 @@ import { DbUser, User } from "../types/types.js";
 import db from "./connections.js";
 
 const existing = async (email: string): Promise<boolean> => {
-  try {
-    await db.oneOrNone("SELECT id FROM users WHERE email = $1", [email]);
-    return false;
-  } catch {
-    return true;
-  }
+  const user = await db.oneOrNone<{ id: number }>("SELECT id FROM users WHERE email = $1", [email]);
+  return user !== null;
 };
 
 const create = async (email: string, passwordHash: string, avatar: string): Promise<User> =>
