@@ -35,11 +35,23 @@ function removeClient(id: number): void {
   clients.delete(id);
 }
 
-function broadcast(payload: unknown): void {
+function send(response: Response, payload: unknown): void {
   const message = `data: ${JSON.stringify(payload)}\n\n`;
 
+  response.write(message);
+}
+
+function broadcast(payload: unknown): void {
   for (const client of clients.values()) {
-    client.response.write(message);
+    send(client.response, payload);
+  }
+}
+
+function broadcastToGame(gameId: number, payload: unknown): void {
+  for (const client of clients.values()) {
+    if (client.gameId === gameId) {
+      send(client.response, payload);
+    }
   }
 }
 
@@ -47,4 +59,5 @@ export default {
   addClient,
   removeClient,
   broadcast,
+  broadcastToGame,
 };
