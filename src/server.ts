@@ -21,7 +21,8 @@ import sseRoutes from "./routes/sse.js";
 configDotenv();
 
 const app = express();
-const PORT: number = process.env.PORT ? Number(process.env.PORT) : 3000;
+app.set("trust proxy", 1);
+const PORT: number = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
 if (process.env.NODE_ENV !== "production") {
   const liveReloadServer = livereload.createServer({ exts: ["ejs", "css", "js"] });

@@ -10,6 +10,9 @@ if (connectionString === undefined) {
 }
 
 const pgp = pgPromise();
-const db = pgp(connectionString);
+const db = pgp({
+  connectionString,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+});
 
 export default db;
