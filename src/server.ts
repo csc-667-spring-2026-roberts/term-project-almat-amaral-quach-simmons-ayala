@@ -2,6 +2,7 @@ import express from "express";
 import session from "express-session";
 import path from "path";
 
+import playRoutes from "./routes/play.js";
 import homeRoutes from "./routes/home.js";
 import testRoutes from "./routes/test.js";
 import authRoutes from "./routes/auth.js";
@@ -69,6 +70,7 @@ app.use("/auth", authRoutes);
 app.use("/lobby", lobbyRoutes);
 app.use("/api/sse", requireAuth, sseRoutes);
 app.use("/api/games", requireAuth, gameRoutes);
+app.use("/games", requireAuth, playRoutes);
 
 app.get("/", (req, res) => {
   res.send(`<h1>Express is listening on port ${String(PORT)}</h1> <p>${typeof req.body}</p>`);

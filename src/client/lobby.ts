@@ -16,6 +16,8 @@ async function joinGame(gameId: number): Promise<void> {
     console.error("Failed to join game");
     return;
   }
+
+  window.location.href = `/games/${String(gameId)}`;
 }
 
 function renderGames(games: GameListItem[]): void {
@@ -69,7 +71,11 @@ async function createGame(): Promise<void> {
 
   if (!response.ok) {
     console.error("Failed to create game");
+    return;
   }
+
+  const { game } = (await response.json()) as { game: { id: number } };
+  window.location.href = `/games/${String(game.id)}`;
 }
 
 const source = new EventSource("/api/sse");

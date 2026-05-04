@@ -15,6 +15,7 @@
       console.error("Failed to join game");
       return;
     }
+    window.location.href = `/games/${String(gameId)}`;
   }
   function renderGames(games) {
     if (!gamesList || !gameTemplate) {
@@ -56,7 +57,10 @@
     });
     if (!response.ok) {
       console.error("Failed to create game");
+      return;
     }
+    const { game } = await response.json();
+    window.location.href = `/games/${String(game.id)}`;
   }
   var source = new EventSource("/api/sse");
   source.onmessage = (event) => {
