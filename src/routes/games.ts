@@ -2,8 +2,26 @@ import { Router } from "express";
 import Games from "../db/games.js";
 import Uno from "../db/uno.js";
 import SSE from "../sse.js";
+import { TypedRequestBody } from "../types/types.js";
 
 const router = Router();
+
+interface PlayCardRequestBody {
+  gameCardId: number;
+}
+
+async function broadcastGameState(gameId: number): Promise<void> {
+  const players = await Uno.getPlayersForGame(gameId);
+
+  for (const player of players) {
+    const state = await Uno.getUnoGameState(gameId, player.id);
+
+    SSE.broadcastToGameUser(gameId, player.id, {
+      type: "game_updated",
+      state,
+    });
+  }
+}
 
 router.get("/", async (_request, response) => {
   const games = await Games.list();
@@ -74,6 +92,7 @@ router.post("/:gameId/join", async (request, response) => {
   }
 
   await Games.join(gameId, user.id);
+  await broadcastGameState(gameId);
 
   const games = await Games.list();
 
@@ -102,11 +121,7 @@ router.post("/:gameId/start", async (request, response) => {
 
   try {
     const state = await Uno.startGame(gameId);
-
-    SSE.broadcastToGame(gameId, {
-      type: "game_updated",
-      state,
-    });
+    await broadcastGameState(gameId);
 
     const games = await Games.list();
 
@@ -118,6 +133,38 @@ router.post("/:gameId/start", async (request, response) => {
     response.status(200).json({ state });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to start game";
+
+    response.status(400).json({ error: message });
+  }
+});
+
+router.post("/:gameId/play", async (request: TypedRequestBody<PlayCardRequestBody>, response) => {
+  const user = request.session.user;
+
+  if (!user) {
+    response.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const gameId = Number(request.params.gameId);
+  const gameCardId = request.body.gameCardId;
+
+  if (
+    !Number.isInteger(gameId) ||
+    gameId <= 0 ||
+    !Number.isInteger(gameCardId) ||
+    gameCardId <= 0
+  ) {
+    response.status(400).json({ error: "Invalid request" });
+    return;
+  }
+
+  try {
+    const state = await Uno.playCard(gameId, user.id, gameCardId);
+    await broadcastGameState(gameId);
+    response.status(200).json({ state });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to play card";
 
     response.status(400).json({ error: message });
   }

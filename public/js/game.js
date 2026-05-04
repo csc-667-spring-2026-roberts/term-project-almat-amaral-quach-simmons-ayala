@@ -48,7 +48,9 @@
       const cardButton = document.createElement("button");
       cardButton.type = "button";
       cardButton.textContent = formatCard(card);
-      cardButton.disabled = true;
+      cardButton.addEventListener("click", () => {
+        void playCard(card.game_card_id);
+      });
       playerHand.appendChild(cardButton);
     }
   }
@@ -95,10 +97,22 @@
       console.error("Failed to start game");
     }
   }
+  async function playCard(gameCardId) {
+    const response = await fetch(`/api/games/${String(gameId)}/play`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ gameCardId })
+    });
+    if (!response.ok) {
+      console.error("Failed to play card");
+    }
+  }
   if (Number.isInteger(gameId) && gameId > 0) {
     const source = new EventSource(`/api/sse?gameId=${String(gameId)}`);
     source.onmessage = (event) => {
-      const data = parseGameMessage(event.data);
+      const data = parseGameMessage(String(event.data));
       if (data?.type === "game_updated" && data.state) {
         renderGameState(data.state);
       }

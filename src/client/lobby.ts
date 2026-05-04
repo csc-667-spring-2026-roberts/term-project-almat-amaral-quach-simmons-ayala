@@ -81,7 +81,7 @@ async function createGame(): Promise<void> {
 const source = new EventSource("/api/sse");
 
 source.onmessage = (event): void => {
-  const data = JSON.parse(event.data) as {
+  const data = JSON.parse(String(event.data)) as {
     type?: string;
     games?: GameListItem[];
   };

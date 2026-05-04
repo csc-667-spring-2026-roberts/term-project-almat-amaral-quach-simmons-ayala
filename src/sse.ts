@@ -55,9 +55,18 @@ function broadcastToGame(gameId: number, payload: unknown): void {
   }
 }
 
+function broadcastToGameUser(gameId: number, userId: number, payload: unknown): void {
+  for (const client of clients.values()) {
+    if (client.gameId === gameId && client.userId === userId) {
+      send(client.response, payload);
+    }
+  }
+}
+
 export default {
   addClient,
   removeClient,
   broadcast,
   broadcastToGame,
+  broadcastToGameUser,
 };

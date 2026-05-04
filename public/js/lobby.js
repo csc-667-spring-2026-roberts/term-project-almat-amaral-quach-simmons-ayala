@@ -64,7 +64,7 @@
   }
   var source = new EventSource("/api/sse");
   source.onmessage = (event) => {
-    const data = JSON.parse(event.data);
+    const data = JSON.parse(String(event.data));
     if (data.type === "games_updated" && data.games) {
       renderGames(data.games);
     }
