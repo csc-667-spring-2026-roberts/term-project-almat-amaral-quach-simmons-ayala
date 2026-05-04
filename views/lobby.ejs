@@ -1,6 +1,6 @@
 <div class="lobby-container">
     <div class="lobby-header">
-        <h2 class="lobby-title">Lobby</h2>
+        <h2 class="lobby-title">Uno Lobby</h2>
         <script src="/js/lobby.js" defer></script>   <!-- defer means 'don't execute this script until the lobby page is loaded' -->
     </div>
     
@@ -14,18 +14,19 @@
                  onerror="this.src='https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y'">
         </div>
         
-        <p class="lobby-welcome">Welcome to the protected area!</p>
+        <p class="lobby-welcome">Create or join an Uno game.</p>
     </div>
     
     <section>
-        <h3>Games</h3>
-        <button id = "create-game">Create Game</button>
+        <h3>Uno Games</h3>
+        <button id="create-game">Create Uno Game</button>
         <template id="game-template">
             <div class="game-card">
                 <span class="game-id"></span>
                 <span class="creator"></span>
                 <span class="players"></span>
                 <span class="status"></span>
+                <button class="join-game" type="button">Join Uno Game</button>
             </div>
         </template>
         <div id="games-list">

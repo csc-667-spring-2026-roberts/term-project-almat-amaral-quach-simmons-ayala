@@ -4,13 +4,25 @@
   var createGameButton = document.querySelector("#create-game");
   var gamesList = document.querySelector("#games-list");
   var gameTemplate = document.querySelector("#game-template");
+  async function joinGame(gameId) {
+    const response = await fetch(`/api/games/${String(gameId)}/join`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+    if (!response.ok) {
+      console.error("Failed to join game");
+      return;
+    }
+  }
   function renderGames(games) {
     if (!gamesList || !gameTemplate) {
       return;
     }
     gamesList.innerHTML = "";
     if (games.length === 0) {
-      gamesList.textContent = "No games created yet. Create one!";
+      gamesList.textContent = "No Uno games created yet. Create one!";
       return;
     }
     games.forEach((game) => {
@@ -19,10 +31,14 @@
       const creator = clone.querySelector(".creator");
       const players = clone.querySelector(".players");
       const status = clone.querySelector(".status");
-      if (gameId) gameId.textContent = `Game #${String(game.id)}`;
-      if (creator) creator.textContent = game.creator_email;
+      const joinButton = clone.querySelector(".join-game");
+      if (gameId) gameId.textContent = `Uno Game #${String(game.id)}`;
+      if (creator) creator.textContent = `Created by: ${game.creator_email}`;
       if (players) players.textContent = `${String(game.player_count)} player(s)`;
-      if (status) status.textContent = String(game.status);
+      if (status) status.textContent = `Status: ${String(game.status)}`;
+      joinButton?.addEventListener("click", () => {
+        void joinGame(game.id);
+      });
       gamesList.appendChild(clone);
     });
   }
