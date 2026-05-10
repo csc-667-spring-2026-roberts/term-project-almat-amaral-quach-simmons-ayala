@@ -349,7 +349,11 @@ async function startGame(gameId: number): Promise<UnoGameStateView> {
   });
 }
 
-async function getNextPlayerId(gameId: number, currentUserId: number): Promise<number> {
+async function getNextPlayerId(
+  gameId: number,
+  currentUserId: number,
+  direction: number,
+): Promise<number> {
   const players = await getPlayers(gameId);
   const currentPlayerIndex = players.findIndex((player) => player.id === currentUserId);
 
@@ -357,7 +361,9 @@ async function getNextPlayerId(gameId: number, currentUserId: number): Promise<n
     throw new Error("Current player is not part of this game");
   }
 
-  const nextPlayer = players[(currentPlayerIndex + 1) % players.length];
+  const nextIndex = (currentPlayerIndex + direction + players.length) % players.length;
+
+  const nextPlayer = players[nextIndex];
 
   if (!nextPlayer) {
     throw new Error("Unable to determine next player");
@@ -366,56 +372,124 @@ async function getNextPlayerId(gameId: number, currentUserId: number): Promise<n
   return nextPlayer.id;
 }
 
+async function getNextPlayerAfterCard(
+  gameId: number,
+  userId: number,
+  selectedCard: UnoGameCardRow,
+  direction: number,
+): Promise<{ nextPlayerId: number; direction: number }> {
+  let currentDirection = direction === -1 ? -1 : 1;
+  const cardValue = selectedCard.value.toLowerCase();
+
+  if (cardValue === "reverse") {
+    currentDirection *= -1;
+  }
+
+  let nextPlayerId = await getNextPlayerId(gameId, userId, currentDirection);
+
+  if (cardValue === "skip") {
+    nextPlayerId = await getNextPlayerId(gameId, nextPlayerId, currentDirection);
+  }
+
+  return { nextPlayerId, direction: currentDirection };
+}
+
+async function getActiveTurnState(
+  transaction: DatabaseTransaction,
+  gameId: number,
+  userId: number,
+): Promise<UnoGameStateRow> {
+  const state = await transaction.oneOrNone<UnoGameStateRow>(
+    `SELECT game_id, current_user_id, current_color, direction, draw_stack, status
+     FROM uno_game_state
+     WHERE game_id = $1
+     FOR UPDATE`,
+    [gameId],
+  );
+
+  if (state === null) {
+    throw new Error("Uno game state not found");
+  }
+
+  if (state.status !== "active") {
+    throw new Error("Game is not active");
+  }
+
+  if (state.current_user_id !== userId) {
+    throw new Error("It is not your turn");
+  }
+
+  return state;
+}
+
+async function getSelectedHandCard(
+  transaction: DatabaseTransaction,
+  gameId: number,
+  userId: number,
+  gameCardId: number,
+): Promise<UnoGameCardRow> {
+  const selectedCard = await transaction.oneOrNone<UnoGameCardRow>(
+    `SELECT
+        gc.id AS game_card_id,
+        c.id AS card_id,
+        c.color,
+        c.value,
+        c.points,
+        gc.position
+     FROM game_cards gc
+     JOIN cards c ON c.id = gc.card_id
+     WHERE gc.id = $1
+       AND gc.game_id = $2
+       AND gc.user_id = $3
+       AND gc.zone = 'hand'`,
+    [gameCardId, gameId, userId],
+  );
+
+  if (selectedCard === null) {
+    throw new Error("Selected card was not found in your hand");
+  }
+
+  return selectedCard;
+}
+
+function validatePlayableCard(
+  selectedCard: UnoGameCardRow,
+  discardTop: UnoVisibleCard | null,
+): void {
+  if (!discardTop) {
+    return;
+  }
+
+  const isPlayable =
+    selectedCard.color === discardTop.color ||
+    selectedCard.value === discardTop.value ||
+    selectedCard.color === "wild";
+
+  if (!isPlayable) {
+    throw new Error("Selected card cannot be played on the current discard");
+  }
+}
+
 async function playCard(
   gameId: number,
   userId: number,
   gameCardId: number,
 ): Promise<UnoGameStateView> {
   return db.tx(async (transaction: DatabaseTransaction) => {
-    const state = await transaction.oneOrNone<UnoGameStateRow>(
-      `SELECT game_id, current_user_id, current_color, direction, draw_stack, status
-       FROM uno_game_state
-       WHERE game_id = $1
-       FOR UPDATE`,
-      [gameId],
-    );
-
-    if (state === null) {
-      throw new Error("Uno game state not found");
-    }
-
-    if (state.status !== "active") {
-      throw new Error("Game is not active");
-    }
-
-    if (state.current_user_id !== userId) {
-      throw new Error("It is not your turn");
-    }
-
-    const selectedCard = await transaction.oneOrNone<UnoGameCardRow>(
-      `SELECT
-          gc.id AS game_card_id,
-          c.id AS card_id,
-          c.color,
-          c.value,
-          c.points,
-          gc.position
-       FROM game_cards gc
-       JOIN cards c ON c.id = gc.card_id
-       WHERE gc.id = $1
-         AND gc.game_id = $2
-         AND gc.user_id = $3
-         AND gc.zone = 'hand'`,
-      [gameCardId, gameId, userId],
-    );
-
-    if (selectedCard === null) {
-      throw new Error("Selected card was not found in your hand");
-    }
-
+    const state = await getActiveTurnState(transaction, gameId, userId);
+    const selectedCard = await getSelectedHandCard(transaction, gameId, userId, gameCardId);
     const discardTop = await getDiscardTop(gameId);
+
+    validatePlayableCard(selectedCard, discardTop);
+
     const nextDiscardPosition = discardTop ? discardTop.position + 1 : 0;
-    const nextPlayerId = await getNextPlayerId(gameId, userId);
+
+    const { nextPlayerId, direction } = await getNextPlayerAfterCard(
+      gameId,
+      userId,
+      selectedCard,
+      state.direction,
+    );
 
     await transaction.none(
       `UPDATE game_cards
@@ -438,11 +512,12 @@ async function playCard(
 
     await transaction.none(
       `UPDATE uno_game_state
-       SET current_user_id = $2,
-           current_color = $3,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE game_id = $1`,
-      [gameId, nextPlayerId, selectedCard.color],
+      SET current_user_id = $2,
+          current_color = $3,
+          direction = $4,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE game_id = $1`,
+      [gameId, nextPlayerId, selectedCard.color, direction],
     );
 
     return getUnoGameState(gameId, userId);
