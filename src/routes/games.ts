@@ -8,6 +8,7 @@ const router = Router();
 
 interface PlayCardRequestBody {
   gameCardId: number;
+  chosenColor?: string; // NEW: Added optional chosenColor property
 }
 
 async function broadcastGameState(gameId: number): Promise<void> {
@@ -148,6 +149,7 @@ router.post("/:gameId/play", async (request: TypedRequestBody<PlayCardRequestBod
 
   const gameId = Number(request.params.gameId);
   const gameCardId = request.body.gameCardId;
+  const chosenColor = request.body.chosenColor; // NEW: Grab the color
 
   if (
     !Number.isInteger(gameId) ||
@@ -160,7 +162,8 @@ router.post("/:gameId/play", async (request: TypedRequestBody<PlayCardRequestBod
   }
 
   try {
-    const state = await Uno.playCard(gameId, user.id, gameCardId);
+    // NEW: Pass chosenColor to the database function
+    const state = await Uno.playCard(gameId, user.id, gameCardId, chosenColor);
     await broadcastGameState(gameId);
     response.status(200).json({ state });
   } catch (error) {

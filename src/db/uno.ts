@@ -474,15 +474,22 @@ async function playCard(
   gameId: number,
   userId: number,
   gameCardId: number,
+  chosenColor?: string,
 ): Promise<UnoGameStateView> {
   return db.tx(async (transaction: DatabaseTransaction) => {
     const state = await getActiveTurnState(transaction, gameId, userId);
     const selectedCard = await getSelectedHandCard(transaction, gameId, userId, gameCardId);
     const discardTop = await getDiscardTop(gameId);
 
-    validatePlayableCard(selectedCard, discardTop);
+    if (selectedCard.color !== "wild") {
+      validatePlayableCard(selectedCard, discardTop);
+    } else if (!chosenColor) {
+      throw new Error("You must pick a color when playing a Wild card");
+    }
 
     const nextDiscardPosition = discardTop ? discardTop.position + 1 : 0;
+    const effectiveColor =
+      selectedCard.color === "wild" && chosenColor ? chosenColor : selectedCard.color;
 
     const { nextPlayerId, direction } = await getNextPlayerAfterCard(
       gameId,
@@ -494,121 +501,116 @@ async function playCard(
     await transaction.none(
       `UPDATE game_cards
        SET position = position - 1
-       WHERE game_id = $1
-         AND user_id = $2
-         AND zone = 'hand'
-         AND position > $3`,
+       WHERE game_id = $1 AND user_id = $2 AND zone = 'hand' AND position > $3`,
       [gameId, userId, selectedCard.position],
     );
 
     await transaction.none(
-      `UPDATE game_cards
-       SET user_id = NULL,
-           zone = 'discard',
-           position = $2
-       WHERE id = $1`,
+      `UPDATE game_cards SET user_id = NULL, zone = 'discard', position = $2 WHERE id = $1`,
       [gameCardId, nextDiscardPosition],
     );
 
     const remainingCardsResult = await transaction.one<{ count: string }>(
-      `SELECT COUNT(*) AS count
-       FROM game_cards
-       WHERE game_id = $1
-         AND user_id = $2
-         AND zone = 'hand'`,
+      `SELECT COUNT(*) AS count FROM game_cards WHERE game_id = $1 AND user_id = $2 AND zone = 'hand'`,
       [gameId, userId],
     );
 
-    const remainingCards = Number(remainingCardsResult.count);
-
-    if (remainingCards === 0) {
+    if (Number(remainingCardsResult.count) === 0) {
       await transaction.none(
-        `UPDATE uno_game_state
-         SET status = 'finished',
-             current_user_id = NULL,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE game_id = $1`,
+        `UPDATE uno_game_state SET status = 'finished', current_user_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE game_id = $1`,
         [gameId],
       );
-
       return getUnoGameState(gameId, userId);
     }
 
     await transaction.none(
-      `UPDATE uno_game_state
-      SET current_user_id = $2,
-          current_color = $3,
-          direction = $4,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE game_id = $1`,
-      [gameId, nextPlayerId, selectedCard.color, direction],
+      `UPDATE uno_game_state SET current_user_id = $2, current_color = $3, direction = $4, updated_at = CURRENT_TIMESTAMP WHERE game_id = $1`,
+      [gameId, nextPlayerId, effectiveColor, direction],
     );
 
     return getUnoGameState(gameId, userId);
   });
 }
 
+async function reshuffleDiscardIntoDeck(
+  transaction: DatabaseTransaction,
+  gameId: number,
+): Promise<UnoGameCardRow> {
+  const discardPileCards = await transaction.any<{ id: number }>(
+    `SELECT gc.id
+       FROM game_cards gc
+       WHERE gc.game_id = $1 AND gc.zone = 'discard'
+       ORDER BY gc.position DESC OFFSET 1`,
+    [gameId],
+  );
+
+  if (discardPileCards.length === 0) {
+    throw new Error("No cards left in deck or discard pile to draw.");
+  }
+
+  // Shuffle logic - Refactored to avoid forbidden non-null assertion
+  for (let i = discardPileCards.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const cardAtI = discardPileCards[i];
+    const cardAtJ = discardPileCards[j];
+
+    if (cardAtI && cardAtJ) {
+      discardPileCards[i] = cardAtJ;
+      discardPileCards[j] = cardAtI;
+    }
+  }
+
+  for (let i = 0; i < discardPileCards.length; i += 1) {
+    const card = discardPileCards[i];
+    if (card) {
+      await transaction.none(`UPDATE game_cards SET zone = 'deck', position = $2 WHERE id = $1`, [
+        card.id,
+        i,
+      ]);
+    }
+  }
+
+  return transaction.one<UnoGameCardRow>(
+    `SELECT gc.id AS game_card_id, c.id AS card_id, c.color, c.value, c.points, gc.position
+       FROM game_cards gc JOIN cards c ON c.id = gc.card_id
+       WHERE gc.game_id = $1 AND gc.zone = 'deck' ORDER BY gc.position ASC LIMIT 1`,
+    [gameId],
+  );
+}
+
 async function drawCard(gameId: number, userId: number): Promise<UnoGameStateView> {
   return db.tx(async (transaction: DatabaseTransaction) => {
     const state = await getActiveTurnState(transaction, gameId, userId);
 
-    const deckCard = await transaction.oneOrNone<UnoGameCardRow>(
-      `SELECT
-          gc.id AS game_card_id,
-          c.id AS card_id,
-          c.color,
-          c.value,
-          c.points,
-          gc.position
-       FROM game_cards gc
-       JOIN cards c ON c.id = gc.card_id
-       WHERE gc.game_id = $1
-         AND gc.zone = 'deck'
-       ORDER BY gc.position ASC
-       LIMIT 1`,
+    let deckCard = await transaction.oneOrNone<UnoGameCardRow>(
+      `SELECT gc.id AS game_card_id, c.id AS card_id, c.color, c.value, c.points, gc.position
+       FROM game_cards gc JOIN cards c ON c.id = gc.card_id
+       WHERE gc.game_id = $1 AND gc.zone = 'deck' ORDER BY gc.position ASC LIMIT 1`,
       [gameId],
     );
 
     if (!deckCard) {
-      throw new Error("Deck is empty");
+      deckCard = await reshuffleDiscardIntoDeck(transaction, gameId);
     }
 
-    const handCountResult = await transaction.one<{ count: string }>(
-      `SELECT COUNT(*) AS count
-       FROM game_cards
-       WHERE game_id = $1
-         AND user_id = $2
-         AND zone = 'hand'`,
+    const handCount = await transaction.one<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM game_cards WHERE game_id = $1 AND user_id = $2 AND zone = 'hand'`,
       [gameId, userId],
     );
 
-    const handPosition = Number(handCountResult.count);
-
     await transaction.none(
-      `UPDATE game_cards
-       SET user_id = $2,
-           zone = 'hand',
-           position = $3
-       WHERE id = $1`,
-      [deckCard.game_card_id, userId, handPosition],
+      `UPDATE game_cards SET user_id = $2, zone = 'hand', position = $3 WHERE id = $1`,
+      [deckCard.game_card_id, userId, Number(handCount.count)],
     );
 
     await transaction.none(
-      `UPDATE game_cards
-       SET position = position - 1
-       WHERE game_id = $1
-         AND zone = 'deck'
-         AND position > $2`,
+      `UPDATE game_cards SET position = position - 1 WHERE game_id = $1 AND zone = 'deck' AND position > $2`,
       [gameId, deckCard.position],
     );
 
     const nextPlayerId = await getNextPlayerId(gameId, userId, state.direction);
-
     await transaction.none(
-      `UPDATE uno_game_state
-       SET current_user_id = $2,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE game_id = $1`,
+      `UPDATE uno_game_state SET current_user_id = $2, updated_at = CURRENT_TIMESTAMP WHERE game_id = $1`,
       [gameId, nextPlayerId],
     );
 

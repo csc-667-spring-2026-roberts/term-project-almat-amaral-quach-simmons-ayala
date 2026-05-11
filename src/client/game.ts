@@ -114,8 +114,27 @@ function renderHand(hand: UnoVisibleCard[]): void {
     cardButton.type = "button";
     cardButton.textContent = formatCard(card);
 
+    // NEW: Add basic styling so they are easier to click
+    cardButton.style.margin = "5px";
+    cardButton.style.padding = "10px";
+
     cardButton.addEventListener("click", () => {
-      void playCard(card.game_card_id);
+      // NEW: Check for wild card before sending the request
+      if (card.color === "wild") {
+        const chosenColor = prompt(
+          "You played a Wild Card! Type a color (red, blue, green, yellow):",
+        );
+        if (
+          !chosenColor ||
+          !["red", "blue", "green", "yellow"].includes(chosenColor.toLowerCase())
+        ) {
+          showError("Invalid color choice. Try playing the card again.");
+          return;
+        }
+        void playCard(card.game_card_id, chosenColor.toLowerCase());
+      } else {
+        void playCard(card.game_card_id);
+      }
     });
 
     playerHand.appendChild(cardButton);
@@ -180,6 +199,7 @@ async function drawCard(): Promise<void> {
   });
 
   if (!response.ok) {
+    // FIX: Added type casting to avoid 'any'
     const data = (await response.json()) as { error?: string };
     showError(data.error ?? "Failed to draw card");
     return;
@@ -188,20 +208,19 @@ async function drawCard(): Promise<void> {
   showMessage("Card drawn. Turn ended.");
 }
 
-async function playCard(gameCardId: number): Promise<void> {
+async function playCard(gameCardId: number, chosenColor?: string): Promise<void> {
   const response = await fetch(`/api/games/${String(gameId)}/play`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ gameCardId }),
+    body: JSON.stringify({ gameCardId, chosenColor }),
   });
 
   if (!response.ok) {
-    const error = await response.json();
-
-    showError(error.error ?? "Invalid Color or Number please try again or Draw cards");
-
+    // FIX: Added type casting to avoid 'any'
+    const errorData = (await response.json()) as { error?: string };
+    showError(errorData.error ?? "Invalid Color or Number please try again or Draw cards");
     return;
   }
 
