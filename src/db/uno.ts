@@ -466,7 +466,7 @@ function validatePlayableCard(
     selectedCard.color === "wild";
 
   if (!isPlayable) {
-    throw new Error("Selected card cannot be played on the current discard");
+    throw new Error("Invalid Color or Number please try again or Draw cards");
   }
 }
 
@@ -510,6 +510,30 @@ async function playCard(
       [gameCardId, nextDiscardPosition],
     );
 
+    const remainingCardsResult = await transaction.one<{ count: string }>(
+      `SELECT COUNT(*) AS count
+       FROM game_cards
+       WHERE game_id = $1
+         AND user_id = $2
+         AND zone = 'hand'`,
+      [gameId, userId],
+    );
+
+    const remainingCards = Number(remainingCardsResult.count);
+
+    if (remainingCards === 0) {
+      await transaction.none(
+        `UPDATE uno_game_state
+         SET status = 'finished',
+             current_user_id = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE game_id = $1`,
+        [gameId],
+      );
+
+      return getUnoGameState(gameId, userId);
+    }
+
     await transaction.none(
       `UPDATE uno_game_state
       SET current_user_id = $2,
@@ -524,9 +548,78 @@ async function playCard(
   });
 }
 
+async function drawCard(gameId: number, userId: number): Promise<UnoGameStateView> {
+  return db.tx(async (transaction: DatabaseTransaction) => {
+    const state = await getActiveTurnState(transaction, gameId, userId);
+
+    const deckCard = await transaction.oneOrNone<UnoGameCardRow>(
+      `SELECT
+          gc.id AS game_card_id,
+          c.id AS card_id,
+          c.color,
+          c.value,
+          c.points,
+          gc.position
+       FROM game_cards gc
+       JOIN cards c ON c.id = gc.card_id
+       WHERE gc.game_id = $1
+         AND gc.zone = 'deck'
+       ORDER BY gc.position ASC
+       LIMIT 1`,
+      [gameId],
+    );
+
+    if (!deckCard) {
+      throw new Error("Deck is empty");
+    }
+
+    const handCountResult = await transaction.one<{ count: string }>(
+      `SELECT COUNT(*) AS count
+       FROM game_cards
+       WHERE game_id = $1
+         AND user_id = $2
+         AND zone = 'hand'`,
+      [gameId, userId],
+    );
+
+    const handPosition = Number(handCountResult.count);
+
+    await transaction.none(
+      `UPDATE game_cards
+       SET user_id = $2,
+           zone = 'hand',
+           position = $3
+       WHERE id = $1`,
+      [deckCard.game_card_id, userId, handPosition],
+    );
+
+    await transaction.none(
+      `UPDATE game_cards
+       SET position = position - 1
+       WHERE game_id = $1
+         AND zone = 'deck'
+         AND position > $2`,
+      [gameId, deckCard.position],
+    );
+
+    const nextPlayerId = await getNextPlayerId(gameId, userId, state.direction);
+
+    await transaction.none(
+      `UPDATE uno_game_state
+       SET current_user_id = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE game_id = $1`,
+      [gameId, nextPlayerId],
+    );
+
+    return getUnoGameState(gameId, userId);
+  });
+}
+
 export default {
   getUnoGameState,
   getPlayersForGame,
   startGame,
   playCard,
+  drawCard,
 };

@@ -170,4 +170,32 @@ router.post("/:gameId/play", async (request: TypedRequestBody<PlayCardRequestBod
   }
 });
 
+router.post("/:gameId/draw", async (request, response) => {
+  const user = request.session.user;
+
+  if (!user) {
+    response.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const gameId = Number(request.params.gameId);
+
+  if (!Number.isInteger(gameId) || gameId <= 0) {
+    response.status(400).json({ error: "Invalid game id" });
+    return;
+  }
+
+  try {
+    const state = await Uno.drawCard(gameId, user.id);
+
+    await broadcastGameState(gameId);
+
+    response.status(200).json({ state });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to draw card";
+
+    response.status(400).json({ error: message });
+  }
+});
+
 export default router;

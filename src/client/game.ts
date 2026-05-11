@@ -37,6 +37,9 @@ const playersList = document.querySelector<HTMLDivElement>("#players-list");
 const discardPile = document.querySelector<HTMLDivElement>("#discard-pile");
 const playerHand = document.querySelector<HTMLDivElement>("#player-hand");
 const startGameButton = document.querySelector<HTMLButtonElement>("#start-game");
+const drawCardButton = document.querySelector<HTMLButtonElement>("#draw-card");
+const errorMessage = document.querySelector<HTMLDivElement>("#error-message");
+const gameMessage = document.querySelector<HTMLDivElement>("#game-message");
 
 const gameId = gameIdInput ? Number(gameIdInput.value) : 0;
 
@@ -44,6 +47,22 @@ function setText(element: HTMLElement | null, text: string): void {
   if (element) {
     element.textContent = text;
   }
+}
+
+function showError(message: string): void {
+  if (!errorMessage) {
+    return;
+  }
+
+  errorMessage.textContent = message;
+
+  setTimeout(() => {
+    errorMessage.textContent = "";
+  }, 3000);
+}
+
+function showMessage(message: string): void {
+  setText(gameMessage, message);
 }
 
 function formatCard(card: UnoVisibleCard): string {
@@ -72,6 +91,7 @@ function renderPlayers(players: UnoPlayerState[], currentUserId: number | null):
     const turnMarker = currentUserId === player.id ? " ← current turn" : "";
 
     playerRow.textContent = `${player.email}: ${String(player.hand_count)} card(s)${turnMarker}`;
+
     playersList.appendChild(playerRow);
   }
 }
@@ -84,7 +104,7 @@ function renderHand(hand: UnoVisibleCard[]): void {
   playerHand.innerHTML = "";
 
   if (hand.length === 0) {
-    playerHand.textContent = "No cards in your hand yet.";
+    playerHand.textContent = "No cards in your hand.";
     return;
   }
 
@@ -93,42 +113,43 @@ function renderHand(hand: UnoVisibleCard[]): void {
 
     cardButton.type = "button";
     cardButton.textContent = formatCard(card);
+
     cardButton.addEventListener("click", () => {
       void playCard(card.game_card_id);
     });
+
     playerHand.appendChild(cardButton);
   }
 }
 
 function renderGameState(state: UnoGameStateView): void {
-  setText(
-    gameStatus,
-    `Status: ${state.status}. Current color: ${state.current_color ?? "none"}. Deck: ${String(
-      state.deck_count,
-    )} card(s).`,
-  );
+  if (state.status === "finished") {
+    const winner = state.players.find((player) => player.hand_count === 0);
 
-  renderPlayers(state.players, state.current_user_id);
+    setText(gameStatus, `Game Over! Winner: ${winner?.email ?? "Unknown Player"}`);
+  } else {
+    setText(
+      gameStatus,
+      `Status: ${state.status}. Current color: ${state.current_color ?? "none"}. Deck: ${String(
+        state.deck_count,
+      )} card(s).`,
+    );
+  }
 
   if (state.discard_top) {
-    setText(discardPile, `Top card: ${formatCard(state.discard_top)}`);
+    setText(discardPile, formatCard(state.discard_top));
   } else {
     setText(discardPile, "No discard card yet.");
   }
 
+  renderPlayers(state.players, state.current_user_id);
   renderHand(state.hand);
 }
 
 async function loadGameState(): Promise<void> {
-  if (!Number.isInteger(gameId) || gameId <= 0) {
-    console.error("Invalid game id");
-    return;
-  }
-
   const response = await fetch(`/api/games/${String(gameId)}/state`);
 
   if (!response.ok) {
-    setText(gameStatus, "Waiting for game to start.");
     return;
   }
 
@@ -138,11 +159,6 @@ async function loadGameState(): Promise<void> {
 }
 
 async function startGame(): Promise<void> {
-  if (!Number.isInteger(gameId) || gameId <= 0) {
-    console.error("Invalid game id");
-    return;
-  }
-
   const response = await fetch(`/api/games/${String(gameId)}/start`, {
     method: "POST",
     headers: {
@@ -151,8 +167,25 @@ async function startGame(): Promise<void> {
   });
 
   if (!response.ok) {
-    console.error("Failed to start game");
+    showMessage("Failed to start game.");
   }
+}
+
+async function drawCard(): Promise<void> {
+  const response = await fetch(`/api/games/${String(gameId)}/draw`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const data = (await response.json()) as { error?: string };
+    showError(data.error ?? "Failed to draw card");
+    return;
+  }
+
+  showMessage("Card drawn. Turn ended.");
 }
 
 async function playCard(gameCardId: number): Promise<void> {
@@ -165,8 +198,14 @@ async function playCard(gameCardId: number): Promise<void> {
   });
 
   if (!response.ok) {
-    console.error("Failed to play card");
+    const error = await response.json();
+
+    showError(error.error ?? "Invalid Color or Number please try again or Draw cards");
+
+    return;
   }
+
+  showMessage("Card played successfully.");
 }
 
 if (Number.isInteger(gameId) && gameId > 0) {
@@ -185,4 +224,8 @@ if (Number.isInteger(gameId) && gameId > 0) {
 
 startGameButton?.addEventListener("click", () => {
   void startGame();
+});
+
+drawCardButton?.addEventListener("click", () => {
+  void drawCard();
 });

@@ -7,11 +7,26 @@
   var discardPile = document.querySelector("#discard-pile");
   var playerHand = document.querySelector("#player-hand");
   var startGameButton = document.querySelector("#start-game");
+  var drawCardButton = document.querySelector("#draw-card");
+  var errorMessage = document.querySelector("#error-message");
+  var gameMessage = document.querySelector("#game-message");
   var gameId = gameIdInput ? Number(gameIdInput.value) : 0;
   function setText(element, text) {
     if (element) {
       element.textContent = text;
     }
+  }
+  function showError(message) {
+    if (!errorMessage) {
+      return;
+    }
+    errorMessage.textContent = message;
+    setTimeout(() => {
+      errorMessage.textContent = "";
+    }, 3e3);
+  }
+  function showMessage(message) {
+    setText(gameMessage, message);
   }
   function formatCard(card) {
     return `${card.color} ${card.value}`;
@@ -41,7 +56,7 @@
     }
     playerHand.innerHTML = "";
     if (hand.length === 0) {
-      playerHand.textContent = "No cards in your hand yet.";
+      playerHand.textContent = "No cards in your hand.";
       return;
     }
     for (const card of hand) {
@@ -55,38 +70,37 @@
     }
   }
   function renderGameState(state) {
-    setText(
-      gameStatus,
-      `Status: ${state.status}. Current color: ${state.current_color ?? "none"}. Deck: ${String(
-        state.deck_count
-      )} card(s).`
-    );
-    renderPlayers(state.players, state.current_user_id);
+    if (state.status === "finished") {
+      const winner = state.players.find((player) => player.hand_count === 0);
+      setText(
+        gameStatus,
+        `Game Over! Winner: ${winner?.email ?? "Unknown Player"}`
+      );
+    } else {
+      setText(
+        gameStatus,
+        `Status: ${state.status}. Current color: ${state.current_color ?? "none"}. Deck: ${String(
+          state.deck_count
+        )} card(s).`
+      );
+    }
     if (state.discard_top) {
-      setText(discardPile, `Top card: ${formatCard(state.discard_top)}`);
+      setText(discardPile, formatCard(state.discard_top));
     } else {
       setText(discardPile, "No discard card yet.");
     }
+    renderPlayers(state.players, state.current_user_id);
     renderHand(state.hand);
   }
   async function loadGameState() {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      console.error("Invalid game id");
-      return;
-    }
     const response = await fetch(`/api/games/${String(gameId)}/state`);
     if (!response.ok) {
-      setText(gameStatus, "Waiting for game to start.");
       return;
     }
     const { state } = await response.json();
     renderGameState(state);
   }
   async function startGame() {
-    if (!Number.isInteger(gameId) || gameId <= 0) {
-      console.error("Invalid game id");
-      return;
-    }
     const response = await fetch(`/api/games/${String(gameId)}/start`, {
       method: "POST",
       headers: {
@@ -94,8 +108,22 @@
       }
     });
     if (!response.ok) {
-      console.error("Failed to start game");
+      showMessage("Failed to start game.");
     }
+  }
+  async function drawCard() {
+    const response = await fetch(`/api/games/${String(gameId)}/draw`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      showError(data.error ?? "Failed to draw card");
+      return;
+    }
+    showMessage("Card drawn. Turn ended.");
   }
   async function playCard(gameCardId) {
     const response = await fetch(`/api/games/${String(gameId)}/play`, {
@@ -106,8 +134,13 @@
       body: JSON.stringify({ gameCardId })
     });
     if (!response.ok) {
-      console.error("Failed to play card");
+      const error = await response.json();
+      showError(
+        error.error ?? "Invalid Color or Number please try again or Draw cards"
+      );
+      return;
     }
+    showMessage("Card played successfully.");
   }
   if (Number.isInteger(gameId) && gameId > 0) {
     const source = new EventSource(`/api/sse?gameId=${String(gameId)}`);
@@ -121,6 +154,9 @@
   }
   startGameButton?.addEventListener("click", () => {
     void startGame();
+  });
+  drawCardButton?.addEventListener("click", () => {
+    void drawCard();
   });
 })();
 //# sourceMappingURL=game.js.map
