@@ -455,20 +455,25 @@ async function getSelectedHandCard(
 function validatePlayableCard(
   selectedCard: UnoGameCardRow,
   discardTop: UnoVisibleCard | null,
+  state: UnoGameStateRow,
 ): void {
   if (!discardTop) {
     return;
   }
 
+  const colorToMatch = state.current_color ?? discardTop.color;
+
   const isPlayable =
-    selectedCard.color === discardTop.color ||
+    selectedCard.color === colorToMatch ||
     selectedCard.value === discardTop.value ||
     selectedCard.color === "wild";
 
   if (!isPlayable) {
-    throw new Error("Invalid Color or Number please try again or Draw cards");
+    // Improved error message to help the user know why it failed
+    throw new Error(`Invalid play. You must match ${colorToMatch} or ${discardTop.value}.`);
   }
 }
+
 async function playCard(
   gameId: number,
   userId: number,
@@ -483,7 +488,7 @@ async function playCard(
     if (selectedCard.color === "wild") {
       if (!chosenColor) throw new Error("You must pick a color.");
     } else {
-      validatePlayableCard(selectedCard, discardTop);
+      validatePlayableCard(selectedCard, discardTop, state);
     }
 
     const nextDiscardPosition = discardTop ? discardTop.position + 1 : 0;

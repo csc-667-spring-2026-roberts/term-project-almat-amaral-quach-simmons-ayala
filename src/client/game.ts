@@ -123,15 +123,20 @@ function renderGameState(state: UnoGameStateView): void {
     const winner = state.players.find((player) => player.hand_count === 0);
     setText(gameStatus, `Game Over! Winner: ${winner?.email ?? "Unknown Player"}`);
   } else {
-    // FIXED: Wrapped all numbers in String() to satisfy ESLint
+    const colorText = state.current_color ?? "none";
     setText(
       gameStatus,
-      `Status: ${state.status}. Color: ${state.current_color ?? "none"}. Deck: ${String(state.deck_count)}. Stack: ${String(state.draw_stack)}`,
+      `Status: ${state.status}. Color: ${colorText}. Deck: ${String(state.deck_count)}. Stack: ${String(state.draw_stack)}`,
     );
   }
 
   if (state.discard_top) {
-    setText(discardPile, formatCard(state.discard_top));
+    // Check if the top card is a wild card
+    const isWild = state.discard_top.color === "wild";
+    // If it's wild, display the color chosen by the player (state.current_color)
+    const displayColor = isWild ? (state.current_color ?? "wild") : state.discard_top.color;
+
+    setText(discardPile, `${displayColor} ${state.discard_top.value}`);
   }
 
   renderPlayers(state.players, state.current_user_id);
