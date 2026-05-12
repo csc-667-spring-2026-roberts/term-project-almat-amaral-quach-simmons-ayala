@@ -26,7 +26,6 @@ interface UnoPlayerState {
   id: number;
   email: string;
   hand_count: number;
-  said_uno: boolean;
 }
 
 interface UnoGameStateRow {
@@ -36,11 +35,9 @@ interface UnoGameStateRow {
   direction: number;
   draw_stack: number;
   status: string;
-  has_drawn: boolean;
 }
 
 interface UnoVisibleCard {
-  id: number; // Changed from any to number
   game_card_id: number;
   card_id: number;
   color: string;
@@ -59,7 +56,6 @@ export interface UnoGameStateView {
   direction: number;
   draw_stack: number;
   deck_count: number;
-  has_drawn: boolean;
   players: UnoPlayerState[];
   discard_top: UnoVisibleCard | null;
   hand: UnoVisibleCard[];
@@ -122,22 +118,33 @@ async function getPlayersForGame(gameId: number): Promise<UnoPlayer[]> {
 
 async function getStateRow(gameId: number): Promise<UnoGameStateRow> {
   const state = await db.oneOrNone<UnoGameStateRow>(
-    `SELECT game_id, current_user_id, current_color, direction, draw_stack, status, COALESCE(has_drawn, false) as has_drawn
-     FROM uno_game_state WHERE game_id = $1`,
+    `SELECT game_id, current_user_id, current_color, direction, draw_stack, status
+     FROM uno_game_state
+     WHERE game_id = $1`,
     [gameId],
   );
-  if (state === null) throw new Error("Uno game state not found");
+
+  if (state === null) {
+    throw new Error("Uno game state not found");
+  }
+
   return state;
 }
 
 async function getPlayerStates(gameId: number): Promise<UnoPlayerState[]> {
   return db.any<UnoPlayerState>(
-    `SELECT u.id, u.email, COUNT(gc.id)::INT AS hand_count, COALESCE(gu.said_uno, false) as said_uno
+    `SELECT
+        u.id,
+        u.email,
+        COUNT(gc.id)::INT AS hand_count
      FROM game_users gu
      JOIN users u ON u.id = gu.user_id
-     LEFT JOIN game_cards gc ON gc.game_id = gu.game_id AND gc.user_id = u.id AND gc.zone = 'hand'
+     LEFT JOIN game_cards gc
+        ON gc.game_id = gu.game_id
+        AND gc.user_id = u.id
+        AND gc.zone = 'hand'
      WHERE gu.game_id = $1
-     GROUP BY u.id, u.email, gu.joined_at, gu.said_uno
+     GROUP BY u.id, u.email, gu.joined_at
      ORDER BY gu.joined_at ASC`,
     [gameId],
   );
@@ -226,13 +233,6 @@ async function dealHands(
         [gameId, card.id, player.id, position],
       );
     }
-    // Reset UNO status - added catch to handle missing columns during migration
-    await (transaction as DatabaseTransaction)
-      .none(`UPDATE game_users SET said_uno = false WHERE game_id = $1 AND user_id = $2`, [
-        gameId,
-        player.id,
-      ])
-      .catch(() => {});
   }
 }
 
@@ -286,7 +286,6 @@ async function getUnoGameState(
     direction: state.direction,
     draw_stack: state.draw_stack,
     deck_count: deckCount,
-    has_drawn: state.has_drawn,
     players,
     discard_top: discardTop,
     hand,
@@ -401,7 +400,7 @@ async function getActiveTurnState(
   userId: number,
 ): Promise<UnoGameStateRow> {
   const state = await transaction.oneOrNone<UnoGameStateRow>(
-    `SELECT game_id, current_user_id, current_color, direction, draw_stack, status, COALESCE(has_drawn, false) as has_drawn
+    `SELECT game_id, current_user_id, current_color, direction, draw_stack, status
      FROM uno_game_state
      WHERE game_id = $1
      FOR UPDATE`,
@@ -470,6 +469,7 @@ function validatePlayableCard(
     selectedCard.color === "wild";
 
   if (!isPlayable) {
+    // Improved error message to help the user know why it failed
     throw new Error(`Invalid play. You must match ${colorToMatch} or ${discardTop.value}.`);
   }
 }
@@ -482,14 +482,6 @@ async function playCard(
 ): Promise<UnoGameStateView> {
   return db.tx(async (transaction: DatabaseTransaction) => {
     const state = await getActiveTurnState(transaction, gameId, userId);
-
-    if (state.draw_stack > 0) {
-      // Wrapped draw_stack in String() for ESLint
-      throw new Error(
-        `Active draw penalty! You must click 'Draw Card' to pick up ${String(state.draw_stack)} cards.`,
-      );
-    }
-
     const selectedCard = await getSelectedHandCard(transaction, gameId, userId, gameCardId);
     const discardTop = await getDiscardTop(gameId);
 
@@ -503,10 +495,14 @@ async function playCard(
     const effectiveColor =
       selectedCard.color === "wild" && chosenColor ? chosenColor : selectedCard.color;
 
+    // Determine Draw Stack Increase
     let drawIncrease = 0;
     const valueLower = selectedCard.value.toLowerCase();
-    if (valueLower === "wild_draw_four") drawIncrease = 4;
-    else if (valueLower === "draw_two") drawIncrease = 2;
+    if (valueLower === "wild_draw_four") {
+      drawIncrease = 4;
+    } else if (valueLower === "draw_two") {
+      drawIncrease = 2;
+    }
 
     const { nextPlayerId, direction } = await getNextPlayerAfterCard(
       gameId,
@@ -515,8 +511,10 @@ async function playCard(
       state.direction,
     );
 
+    // Update game cards
     await transaction.none(
-      `UPDATE game_cards SET position = position - 1 WHERE game_id = $1 AND user_id = $2 AND zone = 'hand' AND position > $3`,
+      `UPDATE game_cards SET position = position - 1 
+       WHERE game_id = $1 AND user_id = $2 AND zone = 'hand' AND position > $3`,
       [gameId, userId, selectedCard.position],
     );
 
@@ -525,6 +523,7 @@ async function playCard(
       [gameCardId, nextDiscardPosition],
     );
 
+    // Win condition check
     const remaining = await transaction.one<{ count: string }>(
       `SELECT COUNT(*) AS count FROM game_cards WHERE game_id = $1 AND user_id = $2 AND zone = 'hand'`,
       [gameId, userId],
@@ -538,17 +537,11 @@ async function playCard(
       return getUnoGameState(gameId, userId);
     }
 
-    if (Number(remaining.count) > 1) {
-      await transaction
-        .none(`UPDATE game_users SET said_uno = false WHERE game_id = $1 AND user_id = $2`, [
-          gameId,
-          userId,
-        ])
-        .catch(() => {});
-    }
-
+    // Save state including draw stack
     await transaction.none(
-      `UPDATE uno_game_state SET current_user_id = $2, current_color = $3, direction = $4, draw_stack = draw_stack + $5, has_drawn = false, updated_at = CURRENT_TIMESTAMP WHERE game_id = $1`,
+      `UPDATE uno_game_state 
+       SET current_user_id = $2, current_color = $3, direction = $4, draw_stack = draw_stack + $5, updated_at = CURRENT_TIMESTAMP 
+       WHERE game_id = $1`,
       [gameId, nextPlayerId, effectiveColor, direction, drawIncrease],
     );
 
@@ -559,21 +552,19 @@ async function playCard(
 async function drawCard(gameId: number, userId: number): Promise<UnoGameStateView> {
   return db.tx(async (transaction: DatabaseTransaction) => {
     const state = await getActiveTurnState(transaction, gameId, userId);
-
-    if (state.has_drawn && state.draw_stack === 0) {
-      throw new Error("You already drew a card. Play it or end your turn.");
-    }
-
     const cardsToDrawCount = state.draw_stack > 0 ? state.draw_stack : 1;
-    // Removed unused lastDrawnCardId variable
 
     for (let i = 0; i < cardsToDrawCount; i += 1) {
       let deckCard = await transaction.oneOrNone<UnoGameCardRow>(
-        `SELECT gc.id AS game_card_id, c.id AS card_id, c.color, c.value, c.points, gc.position FROM game_cards gc JOIN cards c ON c.id = gc.card_id WHERE gc.game_id = $1 AND gc.zone = 'deck' ORDER BY gc.position ASC LIMIT 1`,
+        `SELECT gc.id AS game_card_id, c.id AS card_id, c.color, c.value, c.points, gc.position
+         FROM game_cards gc JOIN cards c ON c.id = gc.card_id
+         WHERE gc.game_id = $1 AND gc.zone = 'deck' ORDER BY gc.position ASC LIMIT 1`,
         [gameId],
       );
 
-      if (!deckCard) deckCard = await reshuffleDiscardIntoDeck(transaction, gameId);
+      if (!deckCard) {
+        deckCard = await reshuffleDiscardIntoDeck(transaction, gameId);
+      }
 
       const handCount = await transaction.one<{ count: string }>(
         `SELECT COUNT(*) AS count FROM game_cards WHERE game_id = $1 AND user_id = $2 AND zone = 'hand'`,
@@ -584,94 +575,19 @@ async function drawCard(gameId: number, userId: number): Promise<UnoGameStateVie
         `UPDATE game_cards SET user_id = $2, zone = 'hand', position = $3 WHERE id = $1`,
         [deckCard.game_card_id, userId, Number(handCount.count)],
       );
+
       await transaction.none(
         `UPDATE game_cards SET position = position - 1 WHERE game_id = $1 AND zone = 'deck' AND position > $2`,
         [gameId, deckCard.position],
       );
     }
 
-    if (state.draw_stack > 0) {
-      const nextPlayerId = await getNextPlayerId(gameId, userId, state.direction);
-      await transaction.none(
-        `UPDATE uno_game_state SET current_user_id = $2, draw_stack = 0, has_drawn = false, updated_at = CURRENT_TIMESTAMP WHERE game_id = $1`,
-        [gameId, nextPlayerId],
-      );
-    } else {
-      await transaction.none(
-        `UPDATE uno_game_state SET has_drawn = true, updated_at = CURRENT_TIMESTAMP WHERE game_id = $1`,
-        [gameId],
-      );
-    }
-
-    await transaction
-      .none(`UPDATE game_users SET said_uno = false WHERE game_id = $1 AND user_id = $2`, [
-        gameId,
-        userId,
-      ])
-      .catch(() => {});
-
-    return getUnoGameState(gameId, userId);
-  });
-}
-
-async function shoutUno(gameId: number, userId: number): Promise<UnoGameStateView> {
-  await db
-    .none(`UPDATE game_users SET said_uno = true WHERE game_id = $1 AND user_id = $2`, [
-      gameId,
-      userId,
-    ])
-    .catch(() => {
-      throw new Error("Missing 'said_uno' column in game_users table. Run migrations.");
-    });
-  return getUnoGameState(gameId, userId);
-}
-
-async function catchUno(gameId: number, catcherId: number): Promise<UnoGameStateView> {
-  return db.tx(async (transaction: DatabaseTransaction) => {
-    const vulnerablePlayers = await transaction.any<{ user_id: number }>(
-      `SELECT gu.user_id FROM game_users gu
-           JOIN (SELECT user_id, COUNT(*) as c FROM game_cards WHERE game_id = $1 AND zone = 'hand' GROUP BY user_id) as hands ON hands.user_id = gu.user_id
-           WHERE gu.game_id = $1 AND hands.c = 1 AND COALESCE(gu.said_uno, false) = false`,
-      [gameId],
-    );
-
-    if (vulnerablePlayers.length === 0) throw new Error("No one forgot to say UNO!");
-
-    for (const player of vulnerablePlayers) {
-      for (let i = 0; i < 2; i++) {
-        const deckCard = await transaction.oneOrNone<{ id: number; position: number }>(
-          `SELECT gc.id, gc.position FROM game_cards gc WHERE gc.game_id = $1 AND gc.zone = 'deck' ORDER BY gc.position ASC LIMIT 1`,
-          [gameId],
-        );
-        if (!deckCard) break;
-        const handCount = await transaction.one<{ count: string }>(
-          `SELECT COUNT(*) as count FROM game_cards WHERE game_id = $1 AND user_id = $2 AND zone = 'hand'`,
-          [gameId, player.user_id],
-        );
-        await transaction.none(
-          `UPDATE game_cards SET user_id = $2, zone = 'hand', position = $3 WHERE id = $1`,
-          [deckCard.id, player.user_id, Number(handCount.count)],
-        );
-        await transaction.none(
-          `UPDATE game_cards SET position = position - 1 WHERE game_id = $1 AND zone = 'deck' AND position > $2`,
-          [gameId, deckCard.position],
-        );
-      }
-    }
-    return getUnoGameState(gameId, catcherId);
-  });
-}
-
-async function endTurn(gameId: number, userId: number): Promise<UnoGameStateView> {
-  return db.tx(async (transaction: DatabaseTransaction) => {
-    const state = await getActiveTurnState(transaction, gameId, userId);
-    if (!state.has_drawn) throw new Error("You must draw a card before ending your turn.");
-
     const nextPlayerId = await getNextPlayerId(gameId, userId, state.direction);
     await transaction.none(
-      `UPDATE uno_game_state SET current_user_id = $2, has_drawn = false, updated_at = CURRENT_TIMESTAMP WHERE game_id = $1`,
+      `UPDATE uno_game_state SET current_user_id = $2, draw_stack = 0, updated_at = CURRENT_TIMESTAMP WHERE game_id = $1`,
       [gameId, nextPlayerId],
     );
+
     return getUnoGameState(gameId, userId);
   });
 }
@@ -692,6 +608,7 @@ async function reshuffleDiscardIntoDeck(
     throw new Error("No cards left in deck or discard pile to draw.");
   }
 
+  // Shuffle logic - Refactored to avoid forbidden non-null assertion
   for (let i = discardPileCards.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
     const cardAtI = discardPileCards[i];
@@ -727,7 +644,4 @@ export default {
   startGame,
   playCard,
   drawCard,
-  endTurn,
-  shoutUno,
-  catchUno,
 };

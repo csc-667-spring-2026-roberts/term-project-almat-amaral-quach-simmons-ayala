@@ -1,3 +1,5 @@
+<!-- views/games.ejs-->
+ 
 <div class="lobby-container">
     <div class="lobby-header">
         <h2 class="lobby-title">Uno Game #<%= gameId %></h2>
@@ -7,7 +9,7 @@
     <hr class="lobby-divider">
 
     <div class="lobby-body">
-        <p class="lobby-text">Logged in as: <strong id="current-user-email"><%= user.email %></strong></p>
+        <p class="lobby-text">Logged in as: <strong><%= user.email %></strong></p>
         <p class="lobby-welcome">This is the game room for Uno Game #<%= gameId %>.</p>
 
         <input id="game-id" type="hidden" value="<%= gameId %>">
@@ -15,18 +17,21 @@
         <section>
             <h3>Game Controls</h3>
 
-            <button id="start-game" type="button">Start Game</button>
-            <button id="draw-card" type="button">Draw Card</button>
-            <button id="end-turn" type="button" style="display: none;">End Turn</button>
-            <button id="shout-uno" type="button" style="background-color: yellow; color: black; display: none;">Shout UNO!</button>
-            <button id="catch-uno" type="button" style="background-color: red; color: white;">Catch UNO!</button>
+            <button id="start-game" type="button">
+                Start Game
+            </button>
+
+            <button id="draw-card" type="button"> Draw Card </button>
 
             <div id="error-message" style="color: red; margin-top: 10px; font-weight: bold;"></div>
         </section>
 
         <section>
             <h3>Messages</h3>
-            <div id="game-message">Waiting for game actions...</div>
+
+            <div id="game-message">
+                Waiting for game actions...
+            </div>
         </section>
 
         <section>
